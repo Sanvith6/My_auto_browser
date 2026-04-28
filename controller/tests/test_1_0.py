@@ -573,6 +573,28 @@ class TestWorkflowEngine:
         conflict_ctx = {"inputs": {"video_id": "inputs"}, "steps": {"video_id": "steps"}}
         assert _resolve_templates("{{ context.video_id }}", conflict_ctx) == "steps"
 
+    async def test_legacy_initial_context_templates(self, tmp_path):
+        from app.workflow.engine import WorkflowEngine
+
+        engine = WorkflowEngine(workflows_root=tmp_path / "workflows")
+        captured = {}
+
+        async def handler(action: str, params: dict, ctx: dict) -> dict:
+            captured["params"] = params
+            return {"ok": True}
+
+        engine.register_action("legacy.step", handler)
+        steps = [
+            {
+                "id": "legacy",
+                "action": "legacy.step",
+                "params": {"message": "Hello {{ context.niche }}"},
+            }
+        ]
+        run = await engine.run("legacy_ctx", steps, {"niche": "bots"})
+        assert captured["params"]["message"] == "Hello bots"
+        assert run.context["inputs"]["niche"] == "bots"
+
     async def test_dependency_ordering(self, tmp_path):
         from app.workflow.engine import WorkflowEngine
         order = []

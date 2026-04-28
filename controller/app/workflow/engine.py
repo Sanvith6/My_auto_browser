@@ -29,6 +29,8 @@ context:
     steps.*: isolated per-step namespaces (no shared keys)
     inputs.*: last-write-wins on init
     outputs.*: overwrite on finalize
+  legacy_shorthand:
+    context.<key>: steps-first fallback, then inputs
   isolation:
     step_namespace: true
 """
