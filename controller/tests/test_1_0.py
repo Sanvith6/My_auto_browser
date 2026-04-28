@@ -564,10 +564,38 @@ class TestWorkflowEngine:
     async def test_template_chaining(self, tmp_path):
         from app.workflow.engine import _resolve_templates
 
-        ctx = {"video_id": "abc123", "nested": {"key": "val"}}
+        ctx = {"inputs": {"video_id": "abc123"}, "steps": {"nested": {"key": "val"}}}
+        assert _resolve_templates("Upload {{ context.inputs.video_id }}", ctx) == "Upload abc123"
+        assert _resolve_templates("{{ context.steps.nested.key }}", ctx) == "val"
+        assert _resolve_templates("{{ context.inputs.missing }}", ctx) == ""
         assert _resolve_templates("Upload {{ context.video_id }}", ctx) == "Upload abc123"
         assert _resolve_templates("{{ context.nested.key }}", ctx) == "val"
-        assert _resolve_templates("{{ context.missing }}", ctx) == ""
+        conflict_ctx = {"inputs": {"video_id": "inputs"}, "steps": {"video_id": "steps"}}
+        assert _resolve_templates("{{ context.video_id }}", conflict_ctx) == "steps"
+        inputs_only_ctx = {"inputs": {"only_in_inputs": "value"}, "steps": {}}
+        assert _resolve_templates("{{ context.only_in_inputs }}", inputs_only_ctx) == "value"
+
+    async def test_legacy_initial_context_templates(self, tmp_path):
+        from app.workflow.engine import WorkflowEngine
+
+        engine = WorkflowEngine(workflows_root=tmp_path / "workflows")
+        captured = {}
+
+        async def handler(action: str, params: dict, ctx: dict) -> dict:
+            captured["params"] = params
+            return {"ok": True}
+
+        engine.register_action("legacy.step", handler)
+        steps = [
+            {
+                "id": "legacy",
+                "action": "legacy.step",
+                "params": {"message": "Hello {{ context.niche }}"},
+            }
+        ]
+        run = await engine.run("legacy_ctx", steps, {"niche": "bots"})
+        assert captured["params"]["message"] == "Hello bots"
+        assert run.context["inputs"]["niche"] == "bots"
 
     async def test_dependency_ordering(self, tmp_path):
         from app.workflow.engine import WorkflowEngine
