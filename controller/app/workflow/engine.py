@@ -105,6 +105,7 @@ _MISSING = object()
 
 
 def _resolve_path(root: Any, key_path: list[str]) -> Any:
+    """Traverse nested dicts using key_path, returning _MISSING when a key is absent."""
     v = root
     for k in key_path:
         if isinstance(v, dict) and k in v:
@@ -150,6 +151,7 @@ def _resolve_templates(value: Any, context: dict[str, Any]) -> Any:
 
 
 def _normalize_context(initial_context: Optional[dict[str, Any]]) -> dict[str, Any]:
+    """Normalize legacy or structured initial_context into inputs/steps/outputs namespaces."""
     context: dict[str, Any] = {"inputs": {}, "steps": {}, "outputs": {}}
     if not initial_context:
         return context
