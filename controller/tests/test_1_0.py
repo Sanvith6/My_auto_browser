@@ -572,6 +572,8 @@ class TestWorkflowEngine:
         assert _resolve_templates("{{ context.nested.key }}", ctx) == "val"
         conflict_ctx = {"inputs": {"video_id": "inputs"}, "steps": {"video_id": "steps"}}
         assert _resolve_templates("{{ context.video_id }}", conflict_ctx) == "steps"
+        inputs_only_ctx = {"inputs": {"only_in_inputs": "value"}, "steps": {}}
+        assert _resolve_templates("{{ context.only_in_inputs }}", inputs_only_ctx) == "value"
 
     async def test_legacy_initial_context_templates(self, tmp_path):
         from app.workflow.engine import WorkflowEngine

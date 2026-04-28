@@ -115,6 +115,7 @@ def _resolve_path(root: Any, key_path: list[str]) -> Any:
 
 
 def _resolve_context_value(context: dict[str, Any], key_path: list[str]) -> Any:
+    """Resolve context paths with a steps-first fallback for legacy shorthand keys."""
     value = _resolve_path(context, key_path)
     if value is not _MISSING:
         return value
