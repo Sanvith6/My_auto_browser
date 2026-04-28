@@ -105,7 +105,7 @@ _MISSING = object()
 
 
 def _resolve_path(root: Any, key_path: list[str]) -> Any:
-    """Traverse nested dicts using key_path, returning _MISSING when a key is absent."""
+    """Traverse nested dicts using key_path, returning root for empty paths or _MISSING when absent."""
     v = root
     for k in key_path:
         if isinstance(v, dict) and k in v:
@@ -116,7 +116,11 @@ def _resolve_path(root: Any, key_path: list[str]) -> Any:
 
 
 def _resolve_context_value(context: dict[str, Any], key_path: list[str]) -> Any:
-    """Resolve context paths with a steps-first fallback for legacy shorthand keys."""
+    """Resolve context paths with steps-first fallback for legacy shorthand keys.
+
+    Legacy shorthand keys are paths that do not start with inputs/steps/outputs,
+    so they fall back from context.steps to context.inputs.
+    """
     value = _resolve_path(context, key_path)
     if value is not _MISSING:
         return value
@@ -151,7 +155,11 @@ def _resolve_templates(value: Any, context: dict[str, Any]) -> Any:
 
 
 def _normalize_context(initial_context: Optional[dict[str, Any]]) -> dict[str, Any]:
-    """Normalize legacy or structured initial_context into inputs/steps/outputs namespaces."""
+    """Normalize legacy or structured initial_context into inputs/steps/outputs namespaces.
+
+    Legacy format: a flat dict with arbitrary keys.
+    Structured format: a dict with explicit inputs/steps/outputs keys.
+    """
     context: dict[str, Any] = {"inputs": {}, "steps": {}, "outputs": {}}
     if not initial_context:
         return context
