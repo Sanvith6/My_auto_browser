@@ -2,11 +2,35 @@
 workflow.engine — Step-graph workflow runner.
 
 Features:
-  - {{ context.key }} template chaining between steps
+  - {{ context.inputs.key }} template resolution for workflow inputs
+  - {{ context.steps.step_id.key }} template chaining between steps
   - Retry with exponential backoff
   - Dependency resolution (steps wait for deps)
   - Disk persistence under /data/workflows/
   - Async execution
+
+Context contract (workflow scope):
+
+context:
+  scope: workflow
+  structure:
+    inputs: {}
+    steps: {}
+    outputs: {}
+  lifecycle:
+    init: merge(initial_context -> context.inputs)
+    per_step: write result to context.steps.<step_id>
+    finalize: optional caller-mapped outputs -> context.outputs
+  write_policy:
+    inputs.*: workflow runner (initial_context)
+    steps.*: workflow runner (per-step results)
+    outputs.*: workflow caller (optional)
+  conflict_resolution:
+    steps.*: isolated per-step namespaces (no shared keys)
+    inputs.*: last-write-wins on init
+    outputs.*: overwrite on finalize
+  isolation:
+    step_namespace: true
 """
 from __future__ import annotations
 
@@ -24,6 +48,7 @@ from typing import Any, Awaitable, Callable, Optional
 logger = logging.getLogger(__name__)
 
 _DEFAULT_WORKFLOWS_ROOT = Path("/data/workflows")
+_CONTEXT_KEYS = ("inputs", "steps", "outputs")
 
 
 # ---------------------------------------------------------------------------
@@ -74,6 +99,34 @@ ActionFn = Callable[[str, dict[str, Any], dict[str, Any]], Awaitable[dict[str, A
 # ---------------------------------------------------------------------------
 
 _TEMPLATE_RE = re.compile(r"\{\{\s*context\.(\w+(?:\.\w+)*)\s*\}\}")
+_MISSING = object()
+
+
+def _resolve_path(root: Any, key_path: list[str]) -> Any:
+    v = root
+    for k in key_path:
+        if isinstance(v, dict) and k in v:
+            v = v[k]
+        else:
+            return _MISSING
+    return v
+
+
+def _resolve_context_value(context: dict[str, Any], key_path: list[str]) -> Any:
+    value = _resolve_path(context, key_path)
+    if value is not _MISSING:
+        return value
+    if not key_path or key_path[0] in _CONTEXT_KEYS:
+        return _MISSING
+    steps = context.get("steps")
+    if isinstance(steps, dict):
+        value = _resolve_path(steps, key_path)
+        if value is not _MISSING:
+            return value
+    inputs = context.get("inputs")
+    if isinstance(inputs, dict):
+        return _resolve_path(inputs, key_path)
+    return _MISSING
 
 
 def _resolve_templates(value: Any, context: dict[str, Any]) -> Any:
@@ -81,12 +134,9 @@ def _resolve_templates(value: Any, context: dict[str, Any]) -> Any:
     if isinstance(value, str):
         def replacer(m: re.Match) -> str:
             key_path = m.group(1).split(".")
-            v = context
-            for k in key_path:
-                if isinstance(v, dict):
-                    v = v.get(k, "")
-                else:
-                    return ""
+            v = _resolve_context_value(context, key_path)
+            if v is _MISSING:
+                return ""
             return str(v)
         return _TEMPLATE_RE.sub(replacer, value)
     if isinstance(value, dict):
@@ -94,6 +144,28 @@ def _resolve_templates(value: Any, context: dict[str, Any]) -> Any:
     if isinstance(value, list):
         return [_resolve_templates(item, context) for item in value]
     return value
+
+
+def _normalize_context(initial_context: Optional[dict[str, Any]]) -> dict[str, Any]:
+    context: dict[str, Any] = {"inputs": {}, "steps": {}, "outputs": {}}
+    if not initial_context:
+        return context
+    if any(key in initial_context for key in _CONTEXT_KEYS):
+        inputs = initial_context.get("inputs", {})
+        steps = initial_context.get("steps", {})
+        outputs = initial_context.get("outputs", {})
+        if isinstance(inputs, dict):
+            context["inputs"] = dict(inputs)
+        if isinstance(steps, dict):
+            context["steps"] = dict(steps)
+        if isinstance(outputs, dict):
+            context["outputs"] = dict(outputs)
+        extra = {k: v for k, v in initial_context.items() if k not in _CONTEXT_KEYS}
+        if extra:
+            context["inputs"].update(extra)
+        return context
+    context["inputs"] = dict(initial_context)
+    return context
 
 
 # ---------------------------------------------------------------------------
@@ -131,7 +203,7 @@ class WorkflowEngine:
         run = WorkflowRun(
             workflow_id=workflow_id,
             steps=wf_steps,
-            context=dict(initial_context or {}),
+            context=_normalize_context(initial_context),
             step_statuses={s.id: StepStatus.PENDING for s in wf_steps},
         )
         run.started_at = time.time()
@@ -215,8 +287,12 @@ class WorkflowEngine:
                 )
                 run.step_results[step.id] = result
                 run.step_statuses[step.id] = StepStatus.COMPLETED
-                # Merge result into context under step.id namespace
-                run.context[step.id] = result
+                # Merge result into context under context.steps.<step_id>
+                steps_context = run.context.get("steps")
+                if not isinstance(steps_context, dict):
+                    steps_context = {}
+                    run.context["steps"] = steps_context
+                steps_context[step.id] = result
                 self._save(run)
                 return
             except asyncio.TimeoutError:

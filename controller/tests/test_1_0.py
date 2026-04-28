@@ -564,10 +564,12 @@ class TestWorkflowEngine:
     async def test_template_chaining(self, tmp_path):
         from app.workflow.engine import _resolve_templates
 
-        ctx = {"video_id": "abc123", "nested": {"key": "val"}}
+        ctx = {"inputs": {"video_id": "abc123"}, "steps": {"nested": {"key": "val"}}}
+        assert _resolve_templates("Upload {{ context.inputs.video_id }}", ctx) == "Upload abc123"
+        assert _resolve_templates("{{ context.steps.nested.key }}", ctx) == "val"
+        assert _resolve_templates("{{ context.inputs.missing }}", ctx) == ""
         assert _resolve_templates("Upload {{ context.video_id }}", ctx) == "Upload abc123"
         assert _resolve_templates("{{ context.nested.key }}", ctx) == "val"
-        assert _resolve_templates("{{ context.missing }}", ctx) == ""
 
     async def test_dependency_ordering(self, tmp_path):
         from app.workflow.engine import WorkflowEngine

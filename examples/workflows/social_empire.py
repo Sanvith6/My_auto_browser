@@ -27,7 +27,7 @@ def VIRAL_PIPELINE(
     Full pipeline: viral research → Veo3 generate → YouTube upload
                    → Shorts repurpose → cross-post to Instagram / X / Reddit
 
-    Context flow ({{ context.step_id.key }}):
+    Context flow ({{ context.inputs.key }}, {{ context.steps.step_id.key }}):
         research    → veo3_prompt, niche, trending_topics
         generate    → path (local video file)
         yt_upload   → video_id
@@ -49,7 +49,7 @@ def VIRAL_PIPELINE(
                 "id": "research",
                 "action": "social.research.viral",
                 "params": {
-                    "niche": "{{ context.niche }}",
+                    "niche": "{{ context.inputs.niche }}",
                     "subreddits": subreddits,
                     "yt_results": 20,
                 },
@@ -62,7 +62,7 @@ def VIRAL_PIPELINE(
                 "action": "social.veo3.generate",
                 "depends_on": ["research"],
                 "params": {
-                    "prompt": "{{ context.research.veo3_prompt }}",
+                    "prompt": "{{ context.steps.research.veo3_prompt }}",
                     "output_filename": "",   # engine uses uuid-based path
                     "duration_seconds": video_duration,
                     "aspect_ratio": aspect_ratio,
@@ -76,9 +76,9 @@ def VIRAL_PIPELINE(
                 "action": "social.youtube.upload",
                 "depends_on": ["generate"],
                 "params": {
-                    "file_path": "{{ context.generate.path }}",
-                    "title": "{{ context.research.trending_topics }}",
-                    "description": "{{ context.niche }} — trending content",
+                    "file_path": "{{ context.steps.generate.path }}",
+                    "title": "{{ context.steps.research.trending_topics }}",
+                    "description": "{{ context.inputs.niche }} — trending content",
                     "tags": [],
                     "privacy": privacy,
                     "make_short": False,
@@ -92,9 +92,9 @@ def VIRAL_PIPELINE(
                 "action": "social.youtube.upload",
                 "depends_on": ["generate"],
                 "params": {
-                    "file_path": "{{ context.generate.path }}",
-                    "title": "#Shorts {{ context.research.trending_topics }}",
-                    "description": "#Shorts #{{ context.niche }}",
+                    "file_path": "{{ context.steps.generate.path }}",
+                    "title": "#Shorts {{ context.steps.research.trending_topics }}",
+                    "description": "#Shorts #{{ context.inputs.niche }}",
                     "tags": ["Shorts"],
                     "privacy": privacy,
                     "make_short": True,
@@ -108,9 +108,9 @@ def VIRAL_PIPELINE(
                 "action": "social.crosspost",
                 "depends_on": ["yt_upload"],
                 "params": {
-                    "video_url": "https://youtu.be/{{ context.yt_upload.video_id }}",
-                    "title": "{{ context.research.trending_topics }}",
-                    "description": "{{ context.niche }} — check this out",
+                    "video_url": "https://youtu.be/{{ context.steps.yt_upload.video_id }}",
+                    "title": "{{ context.steps.research.trending_topics }}",
+                    "description": "{{ context.inputs.niche }} — check this out",
                     "platforms": ["reddit", "x", "instagram"],
                     "subreddits": reddit_crosspost_subs,
                 },
@@ -150,7 +150,7 @@ def SHORTS_BLITZ(
             "action": "social.veo3.generate",
             "depends_on": ["research"],
             "params": {
-                "prompt": "{{ context.research.veo3_prompt }}",
+                "prompt": "{{ context.steps.research.veo3_prompt }}",
                 "duration_seconds": 30,   # Shorts are ≤60s
                 "aspect_ratio": "9:16",   # vertical for Shorts
             },
@@ -163,8 +163,8 @@ def SHORTS_BLITZ(
             "action": "social.youtube.upload",
             "depends_on": [gen_id],
             "params": {
-                "file_path": "{{ context." + gen_id + ".path }}",
-                "title": f"#Shorts {{{{ context.research.trending_topics }}}} #{i + 1}",
+                "file_path": "{{ context.steps." + gen_id + ".path }}",
+                "title": f"#Shorts {{{{ context.steps.research.trending_topics }}}} #{i + 1}",
                 "description": "#Shorts",
                 "tags": ["Shorts"],
                 "privacy": privacy,
