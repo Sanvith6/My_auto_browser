@@ -570,6 +570,8 @@ class TestWorkflowEngine:
         assert _resolve_templates("{{ context.inputs.missing }}", ctx) == ""
         assert _resolve_templates("Upload {{ context.video_id }}", ctx) == "Upload abc123"
         assert _resolve_templates("{{ context.nested.key }}", ctx) == "val"
+        conflict_ctx = {"inputs": {"video_id": "inputs"}, "steps": {"video_id": "steps"}}
+        assert _resolve_templates("{{ context.video_id }}", conflict_ctx) == "steps"
 
     async def test_dependency_ordering(self, tmp_path):
         from app.workflow.engine import WorkflowEngine

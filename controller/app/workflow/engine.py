@@ -163,6 +163,10 @@ def _normalize_context(initial_context: Optional[dict[str, Any]]) -> dict[str, A
         extra = {k: v for k, v in initial_context.items() if k not in _CONTEXT_KEYS}
         if extra:
             context["inputs"].update(extra)
+            logger.warning(
+                "workflow.context: merged extra initial_context keys into inputs: %s",
+                sorted(extra),
+            )
         return context
     context["inputs"] = dict(initial_context)
     return context
